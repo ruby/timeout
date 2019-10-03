@@ -1,8 +1,11 @@
 # Timeout
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/timeout`. To experiment with that code, run `bin/console` for an interactive prompt.
+Timeout provides a way to auto-terminate a potentially long-running
+operation if it hasn't finished in a fixed amount of time.
 
-TODO: Delete this and the text above, and describe your gem
+Previous versions didn't use a module for namespacing, however
+#timeout is provided for backwards compatibility.  You
+should prefer Timeout.timeout instead.
 
 ## Installation
 
@@ -22,7 +25,12 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+require 'timeout'
+status = Timeout::timeout(5) {
+  # Something that should be interrupted if it takes more than 5 seconds...
+}
+```
 
 ## Development
 
@@ -32,4 +40,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/hsbt/timeout.
+Bug reports and pull requests are welcome on GitHub at https://github.com/ruby/timeout.
