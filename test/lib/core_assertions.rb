@@ -28,9 +28,13 @@ module Test
         require_relative '../../envutil'
         # for ruby core testing
         include MiniTest::Assertions
+
+        # Compatibility hack for assert_raise
+        Test::Unit::AssertionFailedError = MiniTest::Assertion
       else
         module MiniTest
-          class Skip; end
+          class Assertion < Exception; end
+          class Skip < Assertion; end
         end
 
         require 'pp'
@@ -90,6 +94,161 @@ module Test
         end
       end
 
+      if defined?(RubyVM::InstructionSequence)
+        def syntax_check(code, fname, line)
+          code = code.dup.force_encoding(Encoding::UTF_8)
+          RubyVM::InstructionSequence.compile(code, fname, fname, line)
+          :ok
+        ensure
+          raise if SyntaxError === $!
+        end
+      else
+        def syntax_check(code, fname, line)
+          code = code.b
+          code.sub!(/\A(?:\xef\xbb\xbf)?(\s*\#.*$)*(\n)?/n) {
+            "#$&#{"\n" if $1 && !$2}BEGIN{throw tag, :ok}\n"
+          }
+          code = code.force_encoding(Encoding::UTF_8)
+          catch {|tag| eval(code, binding, fname, line - 1)}
+        end
+      end
+
+      def assert_no_memory_leak(args, prepare, code, message=nil, limit: 2.0, rss: false, **opt)
+        # TODO: consider choosing some appropriate limit for MJIT and stop skipping this once it does not randomly fail
+        pend 'assert_no_memory_leak may consider MJIT memory usage as leak' if defined?(RubyVM::MJIT) && RubyVM::MJIT.enabled?
+
+        require_relative '../../memory_status'
+        raise MiniTest::Skip, "unsupported platform" unless defined?(Memory::Status)
+
+        token = "\e[7;1m#{$$.to_s}:#{Time.now.strftime('%s.%L')}:#{rand(0x10000).to_s(16)}:\e[m"
+        token_dump = token.dump
+        token_re = Regexp.quote(token)
+        envs = args.shift if Array === args and Hash === args.first
+        args = [
+          "--disable=gems",
+          "-r", File.expand_path("../../../memory_status", __FILE__),
+          *args,
+          "-v", "-",
+        ]
+        if defined? Memory::NO_MEMORY_LEAK_ENVS then
+          envs ||= {}
+          newenvs = envs.merge(Memory::NO_MEMORY_LEAK_ENVS) { |_, _, _| break }
+          envs = newenvs if newenvs
+        end
+        args.unshift(envs) if envs
+        cmd = [
+          'END {STDERR.puts '"#{token_dump}"'"FINAL=#{Memory::Status.new}"}',
+          prepare,
+          'STDERR.puts('"#{token_dump}"'"START=#{$initial_status = Memory::Status.new}")',
+          '$initial_size = $initial_status.size',
+          code,
+          'GC.start',
+        ].join("\n")
+        _, err, status = EnvUtil.invoke_ruby(args, cmd, true, true, **opt)
+        before = err.sub!(/^#{token_re}START=(\{.*\})\n/, '') && Memory::Status.parse($1)
+        after = err.sub!(/^#{token_re}FINAL=(\{.*\})\n/, '') && Memory::Status.parse($1)
+        assert(status.success?, FailDesc[status, message, err])
+        ([:size, (rss && :rss)] & after.members).each do |n|
+          b = before[n]
+          a = after[n]
+          next unless a > 0 and b > 0
+          assert_operator(a.fdiv(b), :<, limit, message(message) {"#{n}: #{b} => #{a}"})
+        end
+      rescue LoadError
+        pend
+      end
+
+      # :call-seq:
+      #   assert_nothing_raised( *args, &block )
+      #
+      #If any exceptions are given as arguments, the assertion will
+      #fail if one of those exceptions are raised. Otherwise, the test fails
+      #if any exceptions are raised.
+      #
+      #The final argument may be a failure message.
+      #
+      #    assert_nothing_raised RuntimeError do
+      #      raise Exception #Assertion passes, Exception is not a RuntimeError
+      #    end
+      #
+      #    assert_nothing_raised do
+      #      raise Exception #Assertion fails
+      #    end
+      def assert_nothing_raised(*args)
+        self._assertions += 1
+        if Module === args.last
+          msg = nil
+        else
+          msg = args.pop
+        end
+        begin
+          line = __LINE__; yield
+        rescue MiniTest::Skip
+          raise
+        rescue Exception => e
+          bt = e.backtrace
+          as = e.instance_of?(MiniTest::Assertion)
+          if as
+            ans = /\A#{Regexp.quote(__FILE__)}:#{line}:in /o
+            bt.reject! {|ln| ans =~ ln}
+          end
+          if ((args.empty? && !as) ||
+              args.any? {|a| a.instance_of?(Module) ? e.is_a?(a) : e.class == a })
+            msg = message(msg) {
+              "Exception raised:\n<#{mu_pp(e)}>\n" +
+              "Backtrace:\n" +
+              e.backtrace.map{|frame| "  #{frame}"}.join("\n")
+            }
+            raise MiniTest::Assertion, msg.call, bt
+          else
+            raise
+          end
+        end
+      end
+
+      def prepare_syntax_check(code, fname = nil, mesg = nil, verbose: nil)
+        fname ||= caller_locations(2, 1)[0]
+        mesg ||= fname.to_s
+        verbose, $VERBOSE = $VERBOSE, verbose
+        case
+        when Array === fname
+          fname, line = *fname
+        when defined?(fname.path) && defined?(fname.lineno)
+          fname, line = fname.path, fname.lineno
+        else
+          line = 1
+        end
+        yield(code, fname, line, message(mesg) {
+                if code.end_with?("\n")
+                  "```\n#{code}```\n"
+                else
+                  "```\n#{code}\n```\n""no-newline"
+                end
+              })
+      ensure
+        $VERBOSE = verbose
+      end
+
+      def assert_valid_syntax(code, *args, **opt)
+        prepare_syntax_check(code, *args, **opt) do |src, fname, line, mesg|
+          yield if defined?(yield)
+          assert_nothing_raised(SyntaxError, mesg) do
+            assert_equal(:ok, syntax_check(src, fname, line), mesg)
+          end
+        end
+      end
+
+      def assert_normal_exit(testsrc, message = '', child_env: nil, **opt)
+        assert_valid_syntax(testsrc, caller_locations(1, 1)[0])
+        if child_env
+          child_env = [child_env]
+        else
+          child_env = []
+        end
+        out, _, status = EnvUtil.invoke_ruby(child_env + %W'-W0', testsrc, true, :merge_to_stdout, **opt)
+        assert !status.signaled?, FailDesc[status, message, out]
+      end
+
       def assert_ruby_status(args, test_stdin="", message=nil, **opt)
         out, _, status = EnvUtil.invoke_ruby(args, test_stdin, true, :merge_to_stdout, **opt)
         desc = FailDesc[status, message, out]
@@ -100,35 +259,57 @@ module Test
 
       ABORT_SIGNALS = Signal.list.values_at(*%w"ILL ABRT BUS SEGV TERM")
 
+      def separated_runner(out = nil)
+        out = out ? IO.new(out, 'w') : STDOUT
+        at_exit {
+          out.puts [Marshal.dump($!)].pack('m'), "assertions=\#{self._assertions}"
+        }
+        Test::Unit::Runner.class_variable_set(:@@stop_auto_run, true)
+      end
+
       def assert_separately(args, file = nil, line = nil, src, ignore_stderr: nil, **opt)
         unless file and line
           loc, = caller_locations(1,1)
           file ||= loc.path
           line ||= loc.lineno
         end
+        capture_stdout = true
+        unless /mswin|mingw/ =~ RUBY_PLATFORM
+          capture_stdout = false
+          opt[:out] = MiniTest::Unit.output
+          res_p, res_c = IO.pipe
+          opt[res_c.fileno] = res_c.fileno
+        end
         src = <<eom
 # -*- coding: #{line += __LINE__; src.encoding}; -*-
+BEGIN {
   require "test/unit";include Test::Unit::Assertions;require #{(__dir__ + "/core_assertions").dump};include Test::Unit::CoreAssertions
-  END {
-    puts [Marshal.dump($!)].pack('m'), "assertions=\#{self._assertions}"
-  }
+  separated_runner #{res_c&.fileno}
+}
 #{line -= __LINE__; src}
-  class Test::Unit::Runner
-    @@stop_auto_run = true
-  end
 eom
         args = args.dup
         args.insert((Hash === args.first ? 1 : 0), "-w", "--disable=gems", *$:.map {|l| "-I#{l}"})
-        stdout, stderr, status = EnvUtil.invoke_ruby(args, src, true, true, **opt)
+        stdout, stderr, status = EnvUtil.invoke_ruby(args, src, capture_stdout, true, **opt)
+      ensure
+        if res_c
+          res_c.close
+          res = res_p.read
+          res_p.close
+        else
+          res = stdout
+        end
+        raise if $!
         abort = status.coredump? || (status.signaled? && ABORT_SIGNALS.include?(status.termsig))
         assert(!abort, FailDesc[status, nil, stderr])
-        self._assertions += stdout[/^assertions=(\d+)/, 1].to_i
+        self._assertions += res[/^assertions=(\d+)/, 1].to_i
         begin
-          res = Marshal.load(stdout.unpack("m")[0])
+          res = Marshal.load(res.unpack1("m"))
         rescue => marshal_error
           ignore_stderr = nil
+          res = nil
         end
-        if res
+        if res and !(SystemExit === res)
           if bt = res.backtrace
             bt.each do |l|
               l.sub!(/\A-:(\d+)/){"#{file}:#{line + $1.to_i}"}
@@ -137,7 +318,7 @@ eom
           else
             res.set_backtrace(caller)
           end
-          raise res unless SystemExit === res
+          raise res
         end
 
         # really is it succeed?
@@ -212,7 +393,7 @@ eom
           }
 
           assert expected, proc {
-            exception_details(e, message(msg) {"#{mu_pp(exp)} exception expected, not"}.call)
+            flunk(message(msg) {"#{mu_pp(exp)} exception expected, not #{mu_pp(e)}"})
           }
 
           return e
@@ -273,6 +454,49 @@ eom
           block.binding.eval("proc{|_|$~=_}").call($~)
         end
         ex
+      end
+
+      # pattern_list is an array which contains regexp and :*.
+      # :* means any sequence.
+      #
+      # pattern_list is anchored.
+      # Use [:*, regexp, :*] for non-anchored match.
+      def assert_pattern_list(pattern_list, actual, message=nil)
+        rest = actual
+        anchored = true
+        pattern_list.each_with_index {|pattern, i|
+          if pattern == :*
+            anchored = false
+          else
+            if anchored
+              match = /\A#{pattern}/.match(rest)
+            else
+              match = pattern.match(rest)
+            end
+            unless match
+              msg = message(msg) {
+                expect_msg = "Expected #{mu_pp pattern}\n"
+                if /\n[^\n]/ =~ rest
+                  actual_mesg = +"to match\n"
+                  rest.scan(/.*\n+/) {
+                    actual_mesg << '  ' << $&.inspect << "+\n"
+                  }
+                  actual_mesg.sub!(/\+\n\z/, '')
+                else
+                  actual_mesg = "to match " + mu_pp(rest)
+                end
+                actual_mesg << "\nafter #{i} patterns with #{actual.length - rest.length} characters"
+                expect_msg + actual_mesg
+              }
+              assert false, msg
+            end
+            rest = match.post_match
+            anchored = true
+          end
+        }
+        if anchored
+          assert_equal("", rest)
+        end
       end
 
       def assert_warning(pat, msg = nil)
@@ -377,7 +601,7 @@ eom
           msg = "exceptions on #{errs.length} threads:\n" +
             errs.map {|t, err|
             "#{t.inspect}:\n" +
-              err.full_message(highlight: false, order: :top)
+              RUBY_VERSION >= "2.5.0" ? err.full_message(highlight: false, order: :top) : err.message
           }.join("\n---\n")
           if message
             msg = "#{message}\n#{msg}"
