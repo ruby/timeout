@@ -131,3 +131,9 @@ module Timeout
 
   module_function :timeout
 end
+
+# Load impl-specific logic on top of base implementation
+case RUBY_ENGINE
+when 'jruby'
+  require 'timeout/jruby'
+end
