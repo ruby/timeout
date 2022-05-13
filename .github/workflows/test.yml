@@ -1,4 +1,4 @@
-name: ubuntu
+name: test
 
 on: [push, pull_request]
 
@@ -6,8 +6,9 @@ jobs:
   build:
     name: build (${{ matrix.ruby }} / ${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
-        ruby: [ '3.0', 2.7, 2.6, 2.5, 2.4, head ]
+        ruby: [ '3.0', 2.7, 2.6, 2.5, 2.4, head, jruby, truffleruby-head ]
         os: [ ubuntu-latest, macos-latest ]
     runs-on: ${{ matrix.os }}
     steps:
