@@ -103,6 +103,9 @@ module Timeout
       while true
         until QUEUE.empty? and !requests.empty? # wait to have at least one request
           req = QUEUE.pop
+
+          Thread.current.kill if req.nil?
+
           requests << req unless req.done?
         end
         closest_deadline = requests.min_by(&:deadline).deadline
@@ -131,6 +134,12 @@ module Timeout
       TIMEOUT_THREAD_MUTEX.synchronize do
         unless @timeout_thread and @timeout_thread.alive?
           @timeout_thread = create_timeout_thread
+
+          # shut down timeout queue and wait for thread termination at exit
+          Kernel.at_exit do
+            QUEUE.close
+            @timeout_thread.join
+          end
         end
       end
     end
