@@ -51,11 +51,11 @@ module Timeout
 
   # :stopdoc:
   CONDVAR = ConditionVariable.new
-  QUEUE = Queue.new
   QUEUE_MUTEX = Mutex.new
   TIMEOUT_THREAD_MUTEX = Mutex.new
+  @@queue = Queue.new
   @timeout_thread = nil
-  private_constant :CONDVAR, :QUEUE, :QUEUE_MUTEX, :TIMEOUT_THREAD_MUTEX
+  private_constant :CONDVAR, :QUEUE_MUTEX, :TIMEOUT_THREAD_MUTEX
 
   class Request
     attr_reader :deadline
@@ -101,8 +101,8 @@ module Timeout
     watcher = Thread.new do
       requests = []
       while true
-        until QUEUE.empty? and !requests.empty? # wait to have at least one request
-          req = QUEUE.pop
+        until @@queue.empty? and !requests.empty? # wait to have at least one request
+          req = @@queue.pop
 
           Thread.current.kill if req.nil?
 
@@ -112,7 +112,7 @@ module Timeout
 
         now = 0.0
         QUEUE_MUTEX.synchronize do
-          while (now = GET_TIME.call(Process::CLOCK_MONOTONIC)) < closest_deadline and QUEUE.empty?
+          while (now = GET_TIME.call(Process::CLOCK_MONOTONIC)) < closest_deadline and @@queue.empty?
             CONDVAR.wait(QUEUE_MUTEX, closest_deadline - now)
           end
         end
@@ -136,9 +136,13 @@ module Timeout
           @timeout_thread = create_timeout_thread
 
           # shut down timeout queue and wait for thread termination at exit
-          Kernel.at_exit do
-            QUEUE.close
-            @timeout_thread.join
+          @shutdown_proc ||= Kernel.at_exit do
+            QUEUE_MUTEX.synchronize do
+              @@queue.close
+              @timeout_thread&.join
+              @@queue = Queue.new
+              @timeout_thread = nil
+            end
           end
         end
       end
@@ -190,7 +194,7 @@ module Timeout
     perform = Proc.new do |exc|
       request = Request.new(Thread.current, sec, exc, message)
       QUEUE_MUTEX.synchronize do
-        QUEUE << request
+        @@queue << request
         CONDVAR.signal
       end
       begin
