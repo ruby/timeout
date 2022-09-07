@@ -50,100 +50,135 @@ module Timeout
   end
 
   # :stopdoc:
-  CONDVAR = ConditionVariable.new
-  QUEUE_MUTEX = Mutex.new
-  TIMEOUT_THREAD_MUTEX = Mutex.new
-  @@queue = Queue.new
-  @timeout_thread = nil
-  private_constant :CONDVAR, :QUEUE_MUTEX, :TIMEOUT_THREAD_MUTEX
+  class Executor
+    CONDVAR = ConditionVariable.new
+    QUEUE_MUTEX = Mutex.new
+    private_constant :CONDVAR, :QUEUE_MUTEX
 
-  class Request
-    attr_reader :deadline
-
-    def initialize(thread, timeout, exception_class, message)
-      @thread = thread
-      @deadline = GET_TIME.call(Process::CLOCK_MONOTONIC) + timeout
-      @exception_class = exception_class
-      @message = message
-
-      @mutex = Mutex.new
-      @done = false # protected by @mutex
+    def initialize
+      @queue = Queue.new
+      @timeout_thread = create_timeout_thread
     end
 
-    def done?
-      @mutex.synchronize do
-        @done
+    def submit(sec, klass, message)
+      perform = Proc.new do |exc|
+        request = Request.new(Thread.current, sec, exc, message)
+        QUEUE_MUTEX.synchronize do
+          @queue << request
+          CONDVAR.signal
+        end
+        begin
+          return yield(sec)
+        ensure
+          request.finished
+        end
+      end
+
+      if klass
+        perform.call(klass)
+      else
+        backtrace = Error.catch(&perform)
+        raise Error, message, backtrace
       end
     end
 
-    def expired?(now)
-      now >= @deadline
+    def shutdown
+      @queue.close
+      @timeout_thread&.join
     end
 
-    def interrupt
-      @mutex.synchronize do
-        unless @done
-          @thread.raise @exception_class, @message
+    def alive?
+      !@queue.closed? && @timeout_thread.alive?
+    end
+
+    class Request
+      attr_reader :deadline
+
+      def initialize(thread, timeout, exception_class, message)
+        @thread = thread
+        @deadline = GET_TIME.call(Process::CLOCK_MONOTONIC) + timeout
+        @exception_class = exception_class
+        @message = message
+
+        @mutex = Mutex.new
+        @done = false # protected by @mutex
+      end
+
+      def done?
+        @mutex.synchronize do
+          @done
+        end
+      end
+
+      def expired?(now)
+        now >= @deadline
+      end
+
+      def interrupt
+        @mutex.synchronize do
+          unless @done
+            @thread.raise @exception_class, @message
+            @done = true
+          end
+        end
+      end
+
+      def finished
+        @mutex.synchronize do
           @done = true
         end
       end
     end
+    private_constant :Request
 
-    def finished
-      @mutex.synchronize do
-        @done = true
-      end
-    end
-  end
-  private_constant :Request
+    def create_timeout_thread
+      watcher = Thread.new do
+        requests = []
+        while true
+          until @queue.empty? and !requests.empty? # wait to have at least one request
+            req = @queue.pop
 
-  def self.create_timeout_thread
-    watcher = Thread.new do
-      requests = []
-      while true
-        until @@queue.empty? and !requests.empty? # wait to have at least one request
-          req = @@queue.pop
+            Thread.current.kill if req.nil?
 
-          Thread.current.kill if req.nil?
-
-          requests << req unless req.done?
-        end
-        closest_deadline = requests.min_by(&:deadline).deadline
-
-        now = 0.0
-        QUEUE_MUTEX.synchronize do
-          while (now = GET_TIME.call(Process::CLOCK_MONOTONIC)) < closest_deadline and @@queue.empty?
-            CONDVAR.wait(QUEUE_MUTEX, closest_deadline - now)
+            requests << req unless req.done?
           end
-        end
+          closest_deadline = requests.min_by(&:deadline).deadline
 
-        requests.each do |req|
-          req.interrupt if req.expired?(now)
-        end
-        requests.reject!(&:done?)
-      end
-    end
-    watcher.name = "Timeout stdlib thread"
-    watcher.thread_variable_set(:"\0__detached_thread__", true)
-    watcher
-  end
-  private_class_method :create_timeout_thread
-
-  def self.ensure_timeout_thread_created
-    unless @timeout_thread and @timeout_thread.alive?
-      TIMEOUT_THREAD_MUTEX.synchronize do
-        unless @timeout_thread and @timeout_thread.alive?
-          @timeout_thread = create_timeout_thread
-
-          # shut down timeout queue and wait for thread termination at exit
-          @shutdown_proc ||= Kernel.at_exit do
-            QUEUE_MUTEX.synchronize do
-              @@queue.close
-              @timeout_thread&.join
-              @@queue = Queue.new
-              @timeout_thread = nil
+          now = 0.0
+          QUEUE_MUTEX.synchronize do
+            while (now = GET_TIME.call(Process::CLOCK_MONOTONIC)) < closest_deadline and @queue.empty?
+              CONDVAR.wait(QUEUE_MUTEX, closest_deadline - now)
             end
           end
+
+          requests.each do |req|
+            req.interrupt if req.expired?(now)
+          end
+          requests.reject!(&:done?)
+        end
+      end
+      watcher.name = "Timeout stdlib thread"
+      watcher.thread_variable_set(:"\0__detached_thread__", true)
+      watcher
+    end
+  end
+
+  EXECUTOR_MUTEX = Mutex.new
+  @@executor = nil
+  private_constant :EXECUTOR_MUTEX
+
+  def self.ensure_executor
+    unless @@executor && @@executor.alive?
+      EXECUTOR_MUTEX.synchronize do
+        unless @@executor && @@executor.alive?
+          executor = Executor.new
+
+          # shut down timeout queue and wait for thread termination at exit
+          Kernel.at_exit do
+            executor&.shutdown
+          end
+
+          @@executor = executor
         end
       end
     end
@@ -190,26 +225,8 @@ module Timeout
       return scheduler.timeout_after(sec, klass || Error, message, &block)
     end
 
-    Timeout.ensure_timeout_thread_created
-    perform = Proc.new do |exc|
-      request = Request.new(Thread.current, sec, exc, message)
-      QUEUE_MUTEX.synchronize do
-        @@queue << request
-        CONDVAR.signal
-      end
-      begin
-        return yield(sec)
-      ensure
-        request.finished
-      end
-    end
-
-    if klass
-      perform.call(klass)
-    else
-      backtrace = Error.catch(&perform)
-      raise Error, message, backtrace
-    end
+    Timeout.ensure_executor
+    @@executor.submit(sec, klass, message, &block)
   end
   module_function :timeout
 end
