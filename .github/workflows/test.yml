@@ -5,6 +5,8 @@ on: [push, pull_request]
 jobs:
   ruby-versions:
     uses: ruby/actions/.github/workflows/ruby_versions.yml@master
+    with:
+      engine: cruby-truffleruby
 
   test:
     needs: ruby-versions
@@ -14,6 +16,9 @@ jobs:
       matrix:
         ruby: ${{ fromJson(needs.ruby-versions.outputs.versions) }}
         os: [ ubuntu-latest, macos-latest ]
+        exclude:
+          - os: macos-latest
+            ruby: truffleruby
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
