@@ -27,18 +27,20 @@ module Timeout
 
   # Internal error raised to when a timeout is triggered.
   class ExitException < Exception
+    def exception(*)
+      self
+    end
   end
 
   # Raised by Timeout.timeout when the block times out.
   class Error < RuntimeError
     def self.handle_timeout(message)
       exc = ExitException.new(message)
-      exc.instance_variable_set(:@thread, Thread.current)
 
       begin
         yield exc
       rescue ExitException => e
-        raise new(message) unless exc.equal?(e)
+        raise new(message) if exc.equal?(e)
         raise
       end
     end

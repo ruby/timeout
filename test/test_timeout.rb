@@ -41,6 +41,19 @@ class TestTimeout < Test::Unit::TestCase
     end
   end
 
+  def test_nested_timeout
+    a = nil
+    assert_raise(Timeout::Error) do
+      Timeout.timeout(0.1) {
+        Timeout.timeout(1) {
+          nil while true
+        }
+        a = 1
+      }
+    end
+    assert_nil a
+  end
+
   def test_cannot_convert_into_time_interval
     bug3168 = '[ruby-dev:41010]'
     def (n = Object.new).zero?; false; end
