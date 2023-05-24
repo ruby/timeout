@@ -48,7 +48,7 @@ module Timeout
         yield exc
       rescue ExitException => e
         raise new(message) unless exc.equal?(e)
-        super
+        raise
       end
     end
   end
