@@ -27,15 +27,6 @@ module Timeout
 
   # Internal error raised to when a timeout is triggered.
   class ExitException < Exception
-    # Return the receiver if it the exception is triggered in
-    # the same thread.
-    def exception(*a)
-      if @thread == Thread.current
-        self
-      else
-        super
-      end
-    end
   end
 
   # Raised by Timeout.timeout when the block times out.
