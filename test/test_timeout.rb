@@ -66,7 +66,7 @@ class TestTimeout < Test::Unit::TestCase
       Timeout.timeout 0.01 do
         begin
           sleep 3
-        rescue
+        rescue => e
           flunk "should not see any exception but saw #{e.inspect}"
         end
       end
