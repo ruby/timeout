@@ -4,12 +4,8 @@ require 'thread'
 
 class TestTimeout < Test::Unit::TestCase
 
-  ### Tests demonstrating problems with standard lib
-  # NOTE: this demonstration was done such that all of the assertions pass,
-  #       The ones marked weird, bad, and very bad should not, and their
-  #       passing is demonstrating the brokenness.
-  # ruby gem at 0f12a0ec11d4a860a56e74a2bb051a77fe70b006 also passes
-
+  # Behavior marked "BAD?" is done so as John's opinion, these can/should be removed before the PR is merged
+  
   require_relative 'lib/error_lifecycle.rb'
 
   # when an exception to raise is not specified and the inner code does not catch Exception
