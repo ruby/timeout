@@ -13,6 +13,11 @@ class TestTimeout < Test::Unit::TestCase
     assert !s.inner_else
     assert s.inner_ensure
     assert s.outer_ensure
+
+    # This can result in user's expectation of total possible time
+    # being very wrong
+    # t = Time.now; Timeout.timeout(0.1){begin; sleep 1; ensure; sleep 2; end} rescue puts Time.now-t
+    # => 2.106306
     assert s.inner_ensure_has_time_to_finish
     assert s.outer_ensure_has_time_to_finish
   end
