@@ -2,10 +2,10 @@ class MyStandardError < StandardError; end
 class MyException< Exception; end
 
 class ErrorLifeCycleTester
-  attr_reader :inner_attempted, :inner_else, :inner_rescue, :inner_ensure, :inner_ensure_has_time_to_finish, :outer_rescue, :outer_else, :outer_ensure, :outer_ensure_has_time_to_finish
+  attr_reader :inner_attempted, :inner_else, :inner_rescue, :inner_ensure, :inner_ensure_has_time_to_finish,
+              :outer_rescue, :outer_else, :outer_ensure, :outer_ensure_has_time_to_finish
 
   def subject(error_to_raise, error_to_rescue)
-
     @inner_attempted = nil
     @inner_else = nil
     @inner_rescue = nil
