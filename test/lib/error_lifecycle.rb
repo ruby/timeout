@@ -18,20 +18,18 @@ class ErrorLifeCycleTester
     @outer_ensure_has_time_to_finish = nil
 
     begin
-      Timeout.timeout(0.001, error_to_raise){
-        begin
-          @inner_attempted = true
-          nil while true
-        rescue error_to_rescue
-          @inner_rescue = true
-        else
-          @inner_else = true
-        ensure
-          @inner_ensure = true
-          t = Time.now; nil while Time.now < t+1
-          @inner_ensure_has_time_to_finish = true
-        end
-      }
+      Timeout.timeout(0.001, error_to_raise) do
+        @inner_attempted = true
+        nil while true
+      rescue error_to_rescue
+        @inner_rescue = true
+      else
+        @inner_else = true
+      ensure
+        @inner_ensure = true
+        t = Time.now; nil while Time.now < t+1
+        @inner_ensure_has_time_to_finish = true
+      end
     rescue Exception
       @outer_rescue = true
     else
