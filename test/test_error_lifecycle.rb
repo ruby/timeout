@@ -4,8 +4,8 @@ require 'thread'
 
 class TestTimeout < Test::Unit::TestCase
 
-  # Behavior marked "BAD?" is done so as John's opinion, these can/should be removed before the PR is merged
-  
+  # Behavior marked "UNDESIRED?" is done so as John's opinion, these can/should be removed before the PR is merged
+
   require_relative 'lib/error_lifecycle.rb'
 
   # when an exception to raise is not specified and the inner code does not catch Exception
@@ -38,7 +38,7 @@ class TestTimeout < Test::Unit::TestCase
     assert s.outer_ensure_has_time_to_finish
     assert s.inner_rescue # true in 1.9, false in gem 0.2.0, true in 0.4.0
 
-    # BAD?
+    # UNDESIRED?
     assert !s.outer_rescue # false in 1.9 stdlib, true in gem 0.2.0, false in 0.4.0
   end
 
@@ -56,7 +56,7 @@ class TestTimeout < Test::Unit::TestCase
     assert s.inner_ensure_has_time_to_finish
     assert s.outer_ensure_has_time_to_finish
 
-    # BAD?
+    # UNDESIRED?
     assert !s.outer_rescue
   end
 
@@ -74,7 +74,7 @@ class TestTimeout < Test::Unit::TestCase
     assert s.inner_ensure_has_time_to_finish
     assert s.outer_ensure_has_time_to_finish
 
-    # BAD?
+    # UNDESIRED?
     assert !s.outer_rescue
   end
 
@@ -108,7 +108,7 @@ class TestTimeout < Test::Unit::TestCase
     assert s.inner_ensure_has_time_to_finish
     assert s.outer_ensure_has_time_to_finish
 
-    # BAD?
+    # UNDESIRED?
     assert !s.outer_rescue
   end
 
