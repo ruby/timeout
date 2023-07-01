@@ -13,7 +13,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(nil, StandardError)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert !s.inner_rescue
@@ -29,7 +28,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(nil, Exception)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert s.inner_ensure
@@ -47,7 +45,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(MyStandardError, StandardError)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert s.inner_rescue
@@ -65,7 +62,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(MyStandardError, Exception)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert s.inner_rescue
@@ -83,7 +79,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(MyException, StandardError)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert !s.inner_rescue
@@ -99,7 +94,6 @@ class TestTimeout < Test::Unit::TestCase
     s = ErrorLifeCycleTester.new
     s.subject(MyException, Exception)
 
-    # EXPECTED
     assert s.inner_attempted
     assert !s.inner_else
     assert s.inner_rescue
