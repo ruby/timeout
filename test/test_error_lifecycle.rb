@@ -38,10 +38,10 @@ class TestTimeout < Test::Unit::TestCase
     s.subject(nil, Exception)
     core_assertions(s)
 
-    assert s.inner_rescue # true in 1.9, false in gem 0.2.0, true in 0.4.0
+    assert s.inner_rescue # true in 1.9, false in gem 0.2.0, true in gem 0.4.0
 
     # UNDESIRED?
-    assert !s.outer_rescue # false in 1.9 stdlib, true in gem 0.2.0, false in 0.4.0
+    assert !s.outer_rescue # false in 1.9 stdlib, true in gem 0.2.0, false in gem 0.4.0
   end
 
   # when an exception to raise is StandardError and the inner code does not catch Exception
