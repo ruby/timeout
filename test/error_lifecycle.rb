@@ -6,16 +6,16 @@ class ErrorLifeCycleTester
               :outer_rescue, :outer_else, :outer_ensure, :outer_ensure_has_time_to_finish
 
   def subject(error_to_raise, error_to_rescue)
-    @inner_attempted = nil
-    @inner_else = nil
-    @inner_rescue = nil
-    @inner_ensure = nil
-    @inner_ensure_has_time_to_finish = nil
+    @inner_attempted = false
+    @inner_else = false
+    @inner_rescue = false
+    @inner_ensure = false
+    @inner_ensure_has_time_to_finish = false
 
-    @outer_rescue = nil
-    @outer_else = nil
-    @outer_ensure = nil
-    @outer_ensure_has_time_to_finish = nil
+    @outer_rescue = false
+    @outer_else = false
+    @outer_ensure = false
+    @outer_ensure_has_time_to_finish = false
 
     begin
       Timeout.timeout(0.001, error_to_raise) do
@@ -42,7 +42,7 @@ class ErrorLifeCycleTester
 
     # this is here to avoid cluttering the "UNDESIRED?" section of each test,
     # can be flatted into the main tests
-    unless !!@outer_else ^ !!@outer_rescue
+    unless @outer_else ^ @outer_rescue
       raise "something strange happened with the outer_rescue variables"
     end
   end
