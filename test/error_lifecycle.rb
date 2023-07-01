@@ -40,6 +40,8 @@ class ErrorLifeCycleTester
       @outer_ensure_has_time_to_finish = true
     end
 
+    # this is here to avoid cluttering the "UNDESIRED?" section of each test,
+    # can be flatted into the main tests
     unless !!@outer_else ^ !!@outer_rescue
       raise "something strange happened with the outer_rescue variables"
     end
