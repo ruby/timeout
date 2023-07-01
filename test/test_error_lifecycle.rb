@@ -6,7 +6,7 @@ class TestTimeout < Test::Unit::TestCase
 
   # Behavior marked "UNDESIRED?" is done so as John's opinion, these can/should be removed before the PR is merged
 
-  require_relative 'lib/error_lifecycle.rb'
+  require_relative 'error_lifecycle.rb'
 
   # when an exception to raise is not specified and the inner code does not catch Exception
   def test_1
