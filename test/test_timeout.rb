@@ -8,6 +8,10 @@ class TestTimeout < Test::Unit::TestCase
     assert_equal Thread.current, Timeout.timeout(10){ Thread.current }
   end
 
+  def test_work_is_done_in_same_fiber_as_caller
+    assert_equal Fiber.current, Timeout.timeout(10){ Fiber.current }
+  end
+
   def test_non_timing_out_code_is_successful
     assert_nothing_raised do
       assert_equal :ok, Timeout.timeout(1){ :ok }
