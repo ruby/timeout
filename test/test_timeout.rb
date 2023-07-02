@@ -9,6 +9,7 @@ class TestTimeout < Test::Unit::TestCase
   end
 
   def test_work_is_done_in_same_fiber_as_caller
+    require 'fiber' # needed for 3.0 and lower
     assert_equal Fiber.current, Timeout.timeout(10){ Fiber.current }
   end
 
