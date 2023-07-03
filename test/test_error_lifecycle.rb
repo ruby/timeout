@@ -2,7 +2,7 @@ require 'test/unit'
 require 'timeout'
 require 'thread'
 
-class TestTimeout < Test::Unit::TestCase
+class TestErrorLifecycle < Test::Unit::TestCase
 
   # Behavior marked "UNDESIRED?" is done so as John's opinion, these can/should be removed before the PR is merged
 
