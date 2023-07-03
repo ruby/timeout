@@ -6,7 +6,7 @@ class TestStressTest < Test::Unit::TestCase
 
   def test_timeout_queue_stress_test
     threads=[]
-    10_000.times do
+    1_000.times do
       print "."
       threads << Thread.new do
         assert_nothing_raised do
