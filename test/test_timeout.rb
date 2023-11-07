@@ -109,6 +109,7 @@ class TestTimeout < Test::Unit::TestCase
     end
 
     assert_equal 'inner message', e.message
+    assert_equal 'inner message', raised_exception.message
   end
 
   def test_cannot_convert_into_time_interval
