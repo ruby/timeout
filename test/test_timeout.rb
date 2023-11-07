@@ -108,7 +108,6 @@ class TestTimeout < Test::Unit::TestCase
       raised_exception = e
     end
 
-    assert_equal 'inner message', e.message
     assert_equal 'inner message', raised_exception.message
   end
 
