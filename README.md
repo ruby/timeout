@@ -32,6 +32,18 @@ status = Timeout::timeout(5) {
 }
 ```
 
+Handling timeout  termination 
+
+```ruby
+begin 
+  status = Timeout::timeout(5) {
+    # Something that should be interrupted if it takes more than 5 seconds...
+  }
+rescue Timeout::Error
+  puts 'The process has taken longer than expected'
+end
+```
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
