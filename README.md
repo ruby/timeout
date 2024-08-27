@@ -3,10 +3,6 @@
 Timeout provides a way to auto-terminate a potentially long-running
 operation if it hasn't finished in a fixed amount of time.
 
-Previous versions didn't use a module for namespacing, however
-#timeout is provided for backwards compatibility.  You
-should prefer Timeout.timeout instead.
-
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -27,7 +23,7 @@ Or install it yourself as:
 
 ```ruby
 require 'timeout'
-status = Timeout::timeout(5) {
+status = Timeout.timeout(5) {
   # Something that should be interrupted if it takes more than 5 seconds...
 }
 ```
