@@ -20,6 +20,8 @@ jobs:
         exclude:
           - os: macos-latest
             ruby: truffleruby
+          - os: ubuntu-latest
+            ruby: truffleruby-head
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
