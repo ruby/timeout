@@ -17,6 +17,11 @@ jobs:
       matrix:
         ruby: ${{ fromJson(needs.ruby-versions.outputs.versions) }}
         os: [ ubuntu-latest, macos-latest ]
+        include:
+          - os: windows-latest
+            ruby: 2.6
+          - os: windows-latest
+            ruby: 3.4
         exclude:
           - os: macos-latest
             ruby: truffleruby
