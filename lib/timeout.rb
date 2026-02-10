@@ -140,6 +140,57 @@ module Timeout
   end
   private_constant :State
 
+  class FiberState
+    attr_reader :mutex
+
+    def initialize
+      @interruptible = false
+      @interrupting = false
+      @mutex = Mutex.new
+      @condvar = ConditionVariable.new
+    end
+
+    def interruptible
+      prev = nil
+      Sync.synchronize @mutex do
+        prev = @interruptible
+        @interruptible = true
+        @condvar.signal
+      end
+      begin
+        yield
+      ensure
+        Sync.synchronize @mutex do
+          @interruptible = prev
+          @condvar.signal
+        end
+      end
+    end
+
+    def start_interrupt(request)
+      raise unless @mutex.owned?
+
+      until @interruptible
+        # We hold the Mutex so the Request can't finish,
+        # except at this wait call, so we check right after
+        @condvar.wait(@mutex)
+        return false if request.done?
+      end
+      @interrupting = true
+      @interruptible = false
+      true
+    end
+
+    def finished
+      raise unless @mutex.owned?
+
+      if @interrupting
+        @interrupting = false
+      end
+    end
+  end
+  private_constant :FiberState
+
   class Request
     attr_reader :deadline
 
@@ -149,13 +200,18 @@ module Timeout
       @exception_class = exception_class
       @message = message
 
-      @mutex = Mutex.new
       @done = false # protected by @mutex
+      @fiber_state = (Thread.current[:timeout_interrupt_queue] ||= FiberState.new)
+      @mutex = @fiber_state.mutex
     end
 
-    # Only called by the timeout thread, so does not need Sync.synchronize
+    def interruptible(&block)
+      @fiber_state.interruptible(&block)
+    end
+
     def done?
-      @mutex.synchronize do
+      return @done if @mutex.owned?
+      Sync.synchronize @mutex do
         @done
       end
     end
@@ -167,16 +223,17 @@ module Timeout
     # Only called by the timeout thread, so does not need Sync.synchronize
     def interrupt
       @mutex.synchronize do
-        unless @done
-          @thread.raise @exception_class, @message
-          @done = true
-        end
+        return if @done
+        return unless @fiber_state.start_interrupt(self)
+        @thread.raise @exception_class, @message
+        @done = true
       end
     end
 
     def finished
       Sync.synchronize @mutex do
         @done = true
+        @fiber_state.finished
       end
     end
   end
@@ -292,7 +349,9 @@ module Timeout
       request = Request.new(Thread.current, sec, exc, message)
       state.add_request(request)
       begin
-        return yield(sec)
+        request.interruptible do
+          yield(sec)
+        end
       ensure
         request.finished
       end
