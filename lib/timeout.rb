@@ -168,7 +168,11 @@ module Timeout
     def interrupt
       @mutex.synchronize do
         unless @done
-          @thread.raise @exception_class, @message
+          begin
+            @thread.raise @exception_class, @message
+          rescue => error
+            @thread.raise error
+          end
           @done = true
         end
       end
