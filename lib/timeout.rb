@@ -277,7 +277,7 @@ module Timeout
   # the block will not be interrupted.
   def self.timeout(sec, klass = nil, message = nil, &block)   #:yield: +sec+
     return yield(sec) if sec == nil or sec.zero?
-    raise ArgumentError, "Timeout sec must be a non-negative number" if 0 > sec
+    raise ArgumentError, "Timeout sec must be a non-negative number" unless 0 <= sec
 
     message ||= "execution expired"
 
