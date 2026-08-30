@@ -68,7 +68,7 @@ module Timeout
       # 1. Ractor.store_if_absent is available
       # 2. Method object can be shareable (4.0~)
       def self.instance
-        Ractor.store_if_absent :timeout_gem_state do
+        Ractor.store_if_absent :"\0timeout_gem_state" do
           State.new
         end
       end
