@@ -96,7 +96,8 @@ module Timeout
             now = 0.0
             @queue_mutex.synchronize do
               while (now = GET_TIME.call(Process::CLOCK_MONOTONIC)) < closest_deadline and @queue.empty?
-                @condvar.wait(@queue_mutex, closest_deadline - now)
+                # Avoid overflowing platform time representations for large deadlines.
+                @condvar.wait(@queue_mutex, [closest_deadline - now, 24 * 60 * 60].min)
               end
             end
 
