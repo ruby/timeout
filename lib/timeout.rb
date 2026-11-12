@@ -177,6 +177,7 @@ module Timeout
     def finished
       Sync.synchronize @mutex do
         @done = true
+        @thread = nil
       end
     end
   end
